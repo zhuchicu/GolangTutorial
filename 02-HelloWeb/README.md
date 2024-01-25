@@ -214,6 +214,44 @@ func (t *T) MethodName { /* method implementation */ } // 指针接收器方法
 - 接收器为 `T` 的方法是<b>值接收器方法</b>， 可以访问结构体本身的字段和方法，但不能修改结构体本身的状态。（只读）
 - 接收器为 `*T` 的方法是<b>指针接收器方法</b>，可以访问和修改结构体本身的字段和方法。（读写）
 
+##### 接收器方法集遵守的规则
+
+- 实例 `o` 的类型是 `T`，则 o 的方法集包含接收器是 `T` 的所有方法；
+- 实例 `o` 的类型是 `*T`，则 o 的方法集包含接收器是 `T` 和 `*T` 的所有方法；
+
+注意：在某些情况下，会发现实例 o 是值（而不是指针）时，依旧是可以调用接收器为 `*T` 的方法，这似乎不符合上述规则。 
+原因：值类型的变量调用接收器的指针类型的方法时，golang 会进行对该变量的取地址操作，从而产生出一个指针，之后再用这个指针调用方法。
+
+前提是这个变量要能取地址。如果不能取地址，比如传入 interface 时的值是不可取地址的。示例如下：
+
+~~~go
+package main
+import "fmt"
+
+type I interface {
+    Method()
+}
+
+type A struct {}
+func (a A) Method() {  // 值接收器方法
+    fmt.Println("A.Method")
+}
+
+type B struct {}
+func (b *B) Method() {  // 指针接收器方法
+    fmt.Println("B.Method")
+}
+
+func main() {
+    var o1 I = A{}
+    o1.Method()
+
+    var o2 I = B{}   // err: B does not implement I (Method method has pointer receiver)
+    var o2 I = &B{}  // suc:
+    o2.Method()
+}
+~~~
+
 #### Q：为什么 Go 语言把类型放在后面？
 
 官方解释 [Go's Declaration Syntax](https://go.dev/blog/declaration-syntax)。分为类型前置和类型后置两种。变量类型后置、函数返回值后置，带来的代码可读性提高，类型推导更简单。
