@@ -150,7 +150,7 @@ type Block interface {
 type MyBlock Block  // 接口类型 MyBlock 会继承自定义类型 Block 的方法集
 ~~~
 
-#### Function declarations
+### Function declarations
 
 若函数签名（function's signature）中声明了结果参数，则函数体的语句列表必须以终止语言 return 结束，即<b>声明了函数返回值</b>。函数声明是可以省略函数体，这样的声明为 Go 在外部实现函数提供了签名，例如在汇编（assembly routine）程序中实现。详细见 [Function_declarations](http://docscn.studygolang.com/ref/spec#Function_declarations)
 
@@ -168,7 +168,7 @@ func flushICache(begin, end uintptr)  // function's signature
 
 若函数的参数，在函数体内不存在引用，则可以省略掉参数标识符。
 
-#### Method declarations
+### Method declarations
 
 [Method_declarations](http://docscn.studygolang.com/ref/spec#Method_declarations)。方法（Method）是指拥有接收器（receiver）的函数。方法声明是将一个标识符（方法名）与一个方法绑定，同时将该方法与接收器的基本类型进行关联。接收器，是通过在方法名前添加一个额外的参数部分来指定。接收器必须是 T 类型的单参数，且 T 必须是自定义类型（defined type），或一个自定义类型指针。自定义类型 T 称为接收器的基本类型（base type）。接收器的基本类型要满足：不是指针或接口类型，且必须与方法定义在同一个包内。该方法被绑定到接收器的基本类型中，方法名仅在类型 T 或 \*T 的选择器（selector）表达式中可见。
 
@@ -189,7 +189,32 @@ func (p *Point) Scale(factor float64) {
 
 ## FQA
 
-#### 为什么 Go 语言把类型放在后面？
+#### Q：为什么要设计接收器函数 `func (receiverType) methodName` 与普通函数 `func methodName`？
+
+* **接收器函数**（也称为方法）可以访问结构体或接口的字段和方法，而没有接收器的函数不能。
+* 接收器函数可以修改结构体或接口的状态，而没有接收器的函数不能。
+* 接收器函数可以作为结构体或接口的类型方法被调用，而没有接收器的函数不能。
+
+简单的说：代码更易读、更易维护、提高代码的安全性、拥有面向对象的特性
+
+* 提高代码的可读性和可维护性：接收器函数可以将与特定类型相关的方法组织在一起，使代码更易于阅读和维护。
+* 提高代码的复用性：接收器函数可以被其他类型复用，这有助于减少代码重复。
+* 提高代码的安全性：接收器函数可以对结构体或接口的状态进行封装，这有助于提高代码的安全性。
+
+#### Q：自定义类型 T 的值接收器方法与指针接收器方法有什么区别？
+
+例如：
+
+~~~go
+type T struct { /* T fields */ }
+func (t T) MethodName { /* method implementation */ }  // 值接收器方法
+func (t *T) MethodName { /* method implementation */ } // 指针接收器方法
+~~~
+
+- 接收器为 `T` 的方法是<b>值接收器方法</b>， 可以访问结构体本身的字段和方法，但不能修改结构体本身的状态。（只读）
+- 接收器为 `*T` 的方法是<b>指针接收器方法</b>，可以访问和修改结构体本身的字段和方法。（读写）
+
+#### Q：为什么 Go 语言把类型放在后面？
 
 官方解释 [Go's Declaration Syntax](https://go.dev/blog/declaration-syntax)。分为类型前置和类型后置两种。变量类型后置、函数返回值后置，带来的代码可读性提高，类型推导更简单。
 
