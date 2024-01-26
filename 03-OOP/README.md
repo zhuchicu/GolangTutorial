@@ -10,7 +10,7 @@
 *   继承：用 Struct 中的内嵌匿名类型（embedded field）的方法来实现继承；
 *   多态：使用接口（interface）实现多态。
 
-### Class：结构体
+### Class
 
 基本属性：
 
@@ -19,11 +19,82 @@
 *   访问 private 字段：getter 方法只使用成员名；setter 使用 Set 前缀；
 *   method Sets：接收器函数（recevier method）作为类方法 `func (recevier T) MethodName(参数列表) 返回值列表 {`。不管方法的 <b>recevier</b> 类型 T 是值或指针，都可以调用，不必严格符合 recevier 的类型。如果定义了 recevier 是<b>值类型</b>的方法，也会隐含定义 recevier 是<b>指针类型</b>的方法。在值类型为大型 struct 时，使用指针 recevier 会更加高效。
 
+setter 和 getter 的命名规则：Go 并不默认支持 setter 和 getter。在 getter 方法名中加入 Get 既不符合习惯，也没有必要。例如，一个未导出字段 `owner`，其 getter 方法称为 `Owner()`，getter 导出时使用大写名称提供了区分字段和方法的钩子。如果需要，setter 函数可能会被称为 `SetOwner()`。
 
-### Inherit：嵌入字段
+### Inherit
+
+因为 Golang 不支持传统意义上的继承，因此需要一种手段（即嵌入类型），把父类型的字段和方法“注入”到子类型中。
+
+### Polymorphism
+
+略
+
+## 扩展内容
+
+### Struct types
+
+结构体由一系列字段（有类型的标识符）组成，域名可以显式指定（IdentifierList）或隐式指定（EmbeddedField）的。在结构体中，非空域名必须是唯一的。在声明域时，可以在尾部添加一个 string 类型的 tag，它主要用于<b>在反射接口（reflection interface）的访问中，作为结构体的类型识别</b>。空字符串 tag 等同于缺省。
+
+- 使用 `new` 或 `make` 函数来实例化 struct 类型；
+- 使用选择器（selector）表达式来访问 struct 字段，例如 `S.f`（Go 的设计者认为 `.` 比 `->` 更简洁、更易读）；
+- 嵌入类型：将一个 struct 类型作为字段嵌入到另一个 struct 类型中；
+- 定义接收器方法：`func (s *S) MethodName(params) return {` ；
+- struct 类型可以实现接口，例如实现 `fmt.Stinger` 接口：`var i Stringer = S{}`。
+
+~~~go
+struct {}       // An empty struct.
+struct {
+    T1        // embedded fields, field name is T1
+    *T2       // embedded fields, field name is T2，T2 本身也不能是指针类型
+    P.T3      // embedded fields, field name is T3，P 是限定类型，即包名
+    *P.T4     // embedded fields, field name is T4
+    x, y int  // field names are x and y
+}
+struct {      // 非法的声明方式：字段名必须是唯一的
+    T         // conflicts with embedded field *T and *P.T
+    *T        // conflicts with embedded field T and *P.T
+    *P.T      // conflicts with embedded field T and *T
+}
+~~~
+
+在尾部添加一个 string 类型的 tag 示例：
+
+~~~go
+/* optional string literal tag */
+struct {
+    x, y float64 ""  // an empty tag string is like an absent tag
+    name string  "any string is permitted as a tag"
+    _    [4]byte "ceci n'est pas un champ de structure"
+}
+struct {   // TimeStamp protocol buffer
+    microsec  uint64 `protobuf:"1"`  // define the protocol buffer field numbers
+    serverIP6 uint64 `protobuf:"2"`  // 遵循反射包概述的约定
+}
+~~~
 
 
-因为 Golang 不支持传统意义上的继承，因此需要一种手段（即嵌入类型），把父类型的字段和方法“注入”到子类型中。如果在结构体 `S` 中声明了类型但没有名称的字段 `F`，那 `F` 就叫做<b>嵌入字段（embedded field）</b>。在引用时，字段的类型名会被当成该字段的名字。示例如下：
+##### struct 的初始化
+
+- 结构体字面量（struct literal）简单直接，不需要使用指针。
+- `new` 可以对 struct 进行一些初始化操作，例如将字段设置为零值（zero value，即默认值）。
+
+~~~go
+type S struct {
+    x int
+    y string
+}
+
+s1 := S{x: 10, y: "Hello, world!"}  // struct literal 初始化
+s1 := S{10, "Hello, world!"}        // 字段名可省略
+
+s2 := new(S)
+fmt.Println("x=", s2.x)  // x=0，int 类型的零值为 0
+s2.y = "Hello, world!"
+~~~
+
+### Embedded field
+
+如果在结构体 `S` 中声明了类型但没有名称的字段 `F`，那 `F` 就叫做<b>嵌入字段（embedded field）</b>。在引用时，字段的类型名会被当成该字段的名字。示例如下：
 
 ~~~go
 type F struct { /* fields */ }  // 自定义类型（defined type）
@@ -181,10 +252,26 @@ func main() {
 
 总结：结构体 `S` 的对象 `o` 是值或指针类型时，理论上都能调用其嵌入字段的方法集（即接收器类型为 `T` 或 `*T`），除了一种特殊情况外，就是<b>当 `o` 为值类型时，不能调用其指针类型嵌入的方法集，即接收器类型为 `*T` 的方法</b>。
 
-### Polymorphism：接口
+### Interface
+
+通过接口类型调用多个实现了 Stringer 接口的类型的 String() 方法：
+
+~~~go
+type T struct {}
+
+func (t T) String() string {
+    return "T"
+}
+
+var i Stringer = S{}
+i.String()  // 输出：S
+
+i = T{}
+i.String()  // 输出：T
+~~~
 
 
-## 扩展内容
+### FQA
 
 #### Q：如何“实例化”接口类型？
 
@@ -219,4 +306,108 @@ func main() {
 - `s.String()` 可以调用<b>任何实现了 `Stringer` 接口的类型的 `String()` 方法</b>，而 `p.String()` 只可以调用 `Person` 结构体的 `String()` 方法。
 
 
+#### Q：如何知道结构体实现了某个接口？
+
+例如，结构体 `S` 实现了某接口方法，示例如下：
+
+~~~go
+package main
+import (
+    "fmt"     // fmt.Stringer 接口
+    "custom"  // 自定义包 custom.Stringer 接口
+)
+
+type S struct { /* fields */ }
+func (s S) String() string { return "S" }
+
+func main() {
+    var s fmt.Stringer = S{}     // 使用显式类型断言来指定实现的是什么接口
+    var s custom.Stringer = S{}
+}
+~~~
+
+- 接口的来源（即声明）只有两种：当前包内和导入的外部包。
+- 实现接口时，都会指明是哪个接口。根据来源查看接口声明，确认接口内所有的方法是否都实现了。
+- 若导入的外部包中存在同名的接口，则会使用显式类型断言来指定实现，例如上述示例。
+
+
+#### Q：结构体中的匿名字段有什么用？
+
+- 代码复用：嵌入字段实现“继承”效果（利用了字段提升）；
+- 嵌入接口：嵌入了接口 `I` 的结构体 `S`，可以作为任何需要 `I` 接口的函数或方法的参数；
+- 内存对齐： 从而提高内存访问的效率。
+
+结构体中嵌入接口作为匿名字段，示例如下：
+
+~~~go
+type Writer interface {
+    Write(p []byte) (n int, err error)
+}
+
+type File struct { Writer } // Writer 接口作为匿名字段
+func (f *File) Write(p []byte) (n int, err error) {
+    // implements...
+    return len(p), nil
+}
+
+func main() {
+    file := &File{}
+    n, err := file.Write([]byte("Hello, world!"))
+    if err != nil { /* 处理错误 */ }
+    fmt.Println(n) // 打印写入的字节数，输出：13
+    
+    // =========================================================
+    // 将 File 结构体作为任何需要 Writer 接口的函数或方法的参数
+    file := &File{
+        Writer: os.Stdout, // 将标准输出作为 Writer。
+    }
+    fmt.Fprintf(file, "Hello, world!")  // 将数据写入文件，将数据写入标准输出。
+}
+
+~~~
+
+##### 匿名字段对齐结构体中的字段
+
+Go 中结构体中的字段必须以“字节对齐”的方式存储。这意味着每个字段的起始地址必须是 2 的幂的倍数。例如，如果一个字段的大小是 1 字节，那么它的起始地址必须是 1、2、4、8 等。如果一个结构体中的字段没有对齐，那么编译器就会在字段之间插入<b>填充字节（padding bytes）</b>来对齐字段。这些填充字节不会被使用，它们只是为了确保字段的起始地址是正确的。
+
+例如，下面示例中的 `_` 变量是一个匿名字段，它的大小为 4 字节。它被用来对齐结构体中的其他字段，以确保它们在内存中以正确的顺序和位置存储：
+
+~~~go
+struct {        // A struct with 6 fields.
+    x, y int    // 占 4 字节，x 起始地址 1，y 是 4
+    u float32   // 占 4 字节，起始地址 8
+    _ float32   // padding bytes，4 字节
+    A *[]int    // 指针类型占 8 字节，起始地址 16=2^4
+    F func()    // 函数类型占 8 字节
+}
+// 若没有匿名字段，A 的起始地址将为 12，导致字节不对齐
+~~~
+
+注意：`_` 变量不能被赋值，也不能被访问。它只是一个占位符，用来对齐结构体中的其他字段。
+
+在实际编程中，开发者通常不需要考虑字节对齐。编译器会自动处理字节对齐，以确保结构体中的字段以正确的顺序和位置存储。在某些情况下需要考虑字节对齐。例如，当开发者需要与其他语言编写的代码进行交互时，或者当程序员需要对结构体中的数据进行底层操作时。
+
+#### Q：使用 `new` 和 `make` 实例化结构体类型有什么区别？
+
+对于引用类型的变量，不光要声明它，还要为它分配内容空间。`func new(Type) *Type` 返回的永远是类型的指针，指向分配类型的内存地址。
+
+~~~go
+var i *int = new(int)
+*i = 10
+fmt.Println(*i)
+~~~
+
+`func make(t Type, size ...IntegerType) Type` 只能用于内置结构体类型的实例化，即 `chan`、`map`、`slice`。它返回的类型就是这三个类型本身，而不是它们的指针类型，因为这三种类型就是引用类型，所以就没有必要返回他们的指针了。
+
+~~~go
+sli := make([]int, 3)
+ch := make(chan int, 1) // 创建有 1 个缓冲的 channel
+m := make(map[string]float32, 100)  // 初始容量 capacity=100
+~~~
+
+二者都是内存的分配（堆上），`new` 用于类型的内存分配，并且内存置为零；`make` 只用于 `slice`、`map` 以及 `channel` 的初始化（非零值）。
+
+### Reference
+
+1. [golang拾遗：嵌入类型](https://www.cnblogs.com/apocelipes/p/14090671.html)
 
