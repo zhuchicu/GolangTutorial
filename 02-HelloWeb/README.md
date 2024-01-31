@@ -12,6 +12,8 @@
         - Client 对应的函数为什么叫 method，而不是 function？
             - 自定义类型的的方法集
     -  Function declarations
+        -  任意参数的函数
+        -  省略掉参数标识符的函数
     -  Method declarations
     - FQA
         - Q：为什么要设计接收器函数 `func (receiverType) methodName` 与普通函数 `func methodName`？
@@ -171,6 +173,30 @@ type MyBlock Block  // 接口类型 MyBlock 会继承自定义类型 Block 的�
 
 ### Function declarations
 
+Go 函数名必须以字母或下划线开头，后面可以跟任意数量的字母、数字或下划线，且不能与 Go 语言的关键字相同。具体格式如：`func 函数名称(参数列表) 返回值列表`。
+
+- 返回值类型可以是任何类型，包括基本类型、复合类型、指针类型、函数类型等。如果没有返回值，则返回值类型可以省略；
+- 如果给返回类型进行了命名，return 语句可以为空（注意不是省略），且被返回类型所命令的变量不要重复定义；
+- 函数可以嵌套定义，即在一个函数体内定义另一个函数。即匿名函数，直接调用或赋予给变量。也称闭包 closures，[Function literals](http://docscn.studygolang.com/ref/spec#Function_literals)；
+- 函数可以重载，即同一个函数名可以对应不同的参数列表和返回值类型。
+- 形参为 `...` 的函数称为 variadic，表示可以传入 0 到多个参数（官方文档 [Passing arguments to ... parameters](http://docscn.studygolang.com/ref/spec#Passing_arguments_to_..._parameters)）。
+- 若函数的参数，在函数体内不存在引用，则可以省略掉参数标识符。
+
+函数的类型声明（[Function types](http://docscn.studygolang.com/ref/spec#Function_types)），示例如下：
+
+~~~go
+func()                                                        // 无参，无返回类型的闭包
+func(x int) int
+func(a, _ int, z float32) bool                                // 多个参数，int 类型有 a 和占位标识符，
+func(a, b int, z float32) (bool)                              // 返回类型为 bool
+func(prefix string, values ...int)                            // 第二个形参 values 表示可以传入多个 int 类型的参数
+func(a, b int, z float64, opt ...interface{}) (success bool)  // 第四个形参 opt 表示可以传入多个 interface{} 类型的参数，返回类型为 bool，且为其命名为 success
+func(int, int, float64) (float64, *[]int)                     // 返回类型有两个，且使用括号（块语句）将它们圈在一起
+func(n int) func(p *T)                                        // 返回类型为函数
+
+f := func(x, y int) int { return x + y }  // 匿名函数，直接调用或赋予给变量
+~~~
+
 若函数签名（function's signature）中声明了结果参数，则函数体的语句列表必须以终止语言 return 结束，即<b>声明了函数返回值</b>。函数声明是可以省略函数体，这样的声明为 Go 在外部实现函数提供了签名，例如在汇编（assembly routine）程序中实现。详细见 [Function_declarations](http://docscn.studygolang.com/ref/spec#Function_declarations)
 
 ```go
@@ -185,7 +211,34 @@ func min(x int, y int) int {  // function's signature, int 即为 result paramet
 func flushICache(begin, end uintptr)  // function's signature
 ```
 
-若函数的参数，在函数体内不存在引用，则可以省略掉参数标识符。
+#### 任意参数的函数
+
+~~~go
+func sum(s string, args ...int)  {
+    var x int
+    for _, n := range args {  // _ 为将索引忽略
+        x += n
+    }
+    fmt.Println(s, x)
+}
+~~~
+
+##### 省略掉参数标识符的函数
+
+例如函数签名为 `func f(int)`，该函数的形参类型为 int，但是却省略了名称，这是为什么？若函数的参数，在函数体内不存在引用，则可以省略掉参数标识符。
+那既然是不需要，那为什么还要在函数签名中定义呢？某些函数需要使用统一的函数类型，但不是所有的函数都需要对应的参数。如果在函数内部不使用这个参数，却在形参中定义了这个形参变量的话，编译的时候会提示变量未使用。在编译的时候只是检查形参的类型，所以定义函数的时候只需指定形参的类型就可以了，可以省去形参名。例如各种窗口消息的响应函数，函数要定义 WPARAM、LPARAM 类型的两个参数，但不是每个消息都要用到这两个参数的，例如 WM_CLOSE 消息，这是就可以把参数只写类型而不写名称。
+
+示例如下：
+
+~~~go
+type IWriter interface {
+    Write(p []byte) error
+}
+type DiscardWriter struct{}                 // 自定义类型
+func (DiscardWriter) Write([]byte) error {  // 只为丢弃数据，不需要具体数据
+    return nil
+}
+~~~
 
 ### Method declarations
 
