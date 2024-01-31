@@ -1,5 +1,15 @@
 # 01-HelloWorld
 
+- 具体步骤
+    - 在本地部署运行
+        - 命令行操作
+    - 在线编译运行
+- 扩展内容
+    - 管理 golang 编译器
+    - 如何在 windows 下部署环境
+    - go build/install/run 区别？
+    - 为 Go 开发配置 Visual Studio Code
+
 ## 具体步骤
 
 ### 在本地部署运行
