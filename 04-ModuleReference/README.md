@@ -1,5 +1,34 @@
 # 04-ModuleReference
 
+- 依赖管理
+    - 依赖管理的历史
+        - 依赖管理的主要内容
+    - 创建 module 
+        - 如何使用 module
+        - go.work 文件
+        - go.mod 文件
+        - go.sum 文件
+- 扩展内容
+    - 模块感知模式
+        - 设置 GOPROXY
+    - go.work 文件解析
+    - go.mod 文件解析
+        - replace directive
+        - retract directive
+    - go.sum 文件解析
+        - 使用 checksum database
+    - Go 环境变量
+    - Version
+        - Pseudo-versions
+        - major version suffix
+    - FQA
+        - Q：package 来自哪个 module
+    - Reference
+
+## 依赖管理
+
+### 依赖管理的历史
+
 Go 语言的依赖管理经历了三个主要阶段：GOPATH、Go Vendor 和 Go Module。
 
 GOPATH 阶段：这是 Go语 言早期的一个依赖管理方式，它是一个环境变量，也是 Go 项目的工作区。在GOPATH下，项目源码、编译生成的库文件和项目编译的二进制文件都有特定的存放路径。然而，如果多个项目依赖同一个库，则每个项目只能使用该库的同一份代码，容易触发依赖冲突，无法实现库的多版本控制，GOPATH 管理模式就显得力不从心。
@@ -8,8 +37,7 @@ Go Vendor 阶段：在 Go 1.5 版本中推出了 vendor 机制，每个项目的
 
 Go Module 阶段：从 Go 1.11 版本开始，官方推出 Go Module 作为包管理工具，并在 Go 1.16 版本中默认开启。在项目目录下有一个 go.mod 文件，且工程项目可以放在 GOPATH 路径之外。通过 go.mod 文件来描述模块的依赖关系，并使用 go get/go mod 指令工具来管理依赖包的下载和更新。Go Module 解决了之前存在的问题，实现了库的多版本控制，并且可以自动化管理依赖包的下载、编译和安装过程。
 
-
-## 依赖管理
+#### 依赖管理的主要内容
 
 跟依赖相关（[Go Modules Reference](https://go.dev/ref/mod)）的内容主要是以下这些：
 
