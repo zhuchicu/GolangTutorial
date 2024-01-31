@@ -1,5 +1,24 @@
 # 02-HelloWeb
 
+- 详细介绍
+    -  如何运行
+- 扩展内容
+    -  Types of imports
+        - import "path/to/package"
+        - import \<alias> "path/to/package"
+        - import 其他用法
+    -  Type declarations
+        - Type declarations
+        - Client 对应的函数为什么叫 method，而不是 function？
+            - 自定义类型的的方法集
+    -  Function declarations
+    -  Method declarations
+    - FQA
+        - Q：为什么要设计接收器函数 `func (receiverType) methodName` 与普通函数 `func methodName`？
+        - Q：自定义类型 T 的值接收器方法与指针接收器方法有什么区别？
+            - 接收器方法集遵守的规则
+        - Q：为什么 Go 语言把类型放在后面？
+
 ## 详细介绍
 
 ### 如何运行
@@ -187,7 +206,7 @@ func (p *Point) Scale(factor float64) {
 }
 ```
 
-## FQA
+### FQA
 
 #### Q：为什么要设计接收器函数 `func (receiverType) methodName` 与普通函数 `func methodName`？
 
