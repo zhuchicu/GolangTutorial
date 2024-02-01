@@ -15,8 +15,10 @@
         - 空接口
         - 嵌入接口
         - 类型断言
-        - 接口的应用示例1：非空接口调用所有实现
-        - 接口的应用示例2：空接口的类型断言
+        - 类型转换
+            - 判断类型是否相等（Type identity）
+            - 判断值是否可赋予给某类型变量（Assignability）
+      	    - 判断能否用某类型代表常量（Representability） 
     - FQA
         - Q：如何“实例化”接口类型？
         - Q：如何知道结构体实现了某个接口？
@@ -385,7 +387,32 @@ var v, ok = x.(T)             // 声明
 var v, ok interface{} = x.(T) // dynamic types of v and ok are T and bool
 ```
 
-#### 接口的应用示例1：非空接口调用所有实现
+##### 示例
+
+~~~go
+type I interface{
+    print()
+}
+type S struct {
+    x int
+}
+func (t S) print() {
+    fmt.Println("x=", t.x)
+}
+
+// 参数为空接口类型，能够接受任意类型，按需要进行“类型断言”
+func f(i interface{}) {
+  j, _ := i.(I)
+  j.print()
+}
+
+func main() {
+  var i I = S{10}
+  f(i) // 输出：x=10
+}
+~~~
+
+#### 接口的应用示例：非空接口调用所有实现
 
 通过接口类型调用多个实现了 Stringer 接口的类型的 String() 方法：
 
@@ -413,30 +440,65 @@ func main() {
 
 上述示例中，也可以直接使用类型 T 或 S 的变量调用接口方法。
 
-#### 接口的应用示例2：空接口的类型断言
+### 类型转换
 
-~~~go
-type I interface{
-    print()
-}
-type S struct {
-    x int
-}
-func (t S) print() {
-    fmt.Println("x=", t.x)
-}
+Go 语言不允许隐式类型转换，所有的类型转换都需要显式的进行。即需要进行强制类型转换（`T()` 形式）。
 
-// 参数为空接口类型，能够接受任意类型，按需要进行“类型断言”
-func f(i interface{}) {
-  j, _ := i.(I)
-  j.print()
-}
+#### <span id="判断类型是否相等（Type_identity）">判断类型是否相等（Type identity）</span>
 
-func main() {
-  var i I = S{10}
-  f(i) // 输出：x=10
-}
-~~~
+两个类型要么相同，要么不同。通常自定义类型（defined type）与其他类型都不相同，除非两个类型具有相同的文字结构（literal structure），对应的组件具有相同的类型，那这两种类型是相等的（identical）。具体如下：
+
+*   如果两个数组类型具有相同的元素类型和相同的数组长度，则它们是相同的；
+*   如果两个切片类型具有相同的元素类型，则它们是相同的；
+*   如果两个结构体类型具有相同的字段序列，并且相应的字段具有相同的名称、相同的类型和相同的标记，则它们是相同的。来自不同包的非导出字段名总是不同的。
+*   如果两个指针类型具有相同的基类型（base types），则它们是相同的；
+*   如果两个函数类型具有相同数量的参数和结果值，对应的参数和结果类型相同，并且两个函数要么都是可变的，要么都不是，则它们是相同的。参数名和结果名不需要一致；
+*   如果两个接口类型具有具有相同名称和相同函数类型的相同方法集，则它们是相同的。来自不同包的非导出方法名总是不同的。方法的顺序是无关的；
+*   如果两个映射类型具有相同的键和元素类型，则它们是相同的；
+*   如果两个信道类型具有相同的元素类型和相同的方向，则它们是相同的。
+
+#### <span id="判断值是否可赋予给某类型变量（Assignability）">判断值是否可赋予给某类型变量（Assignability）</span>
+
+如果满足以下条件之一，则值 x 可赋值给类型 T 的变量(“x 可赋值给 T”)：
+
+*   x 的类型和 T 相同；
+*   x 的类型 V 和 T 具有相同的底层类型（underlying types），并且 V 或 T 中至少有一个不是自定义类型（defined type）；
+*   T 是接口类型，x 实现 T。
+*   x 是双向信道值，T 是信道类型，x 的类型 V 和 T 具有相同的元素类型，并且 V 或 T 中至少有一个不是自定义类型；
+*   x 是预先声明的标识符 nil，T 是指针、函数、切片、映射、信道或接口中任一类型；
+*   x 是一个无类型常量（untyped constant），可以用 T 类型的值表示。
+
+如，在没有显式类型的短变量声明 `i:= 0` 中，无类型常量 0 的默认类型分别为 bool、rune、int、float64、complex128 或 string。变量 i 的 underlying types 也不可知。
+
+#### <span id="判断能否用某类型代表常量（Representability）">判断能否用某类型代表常量（Representability）</span>
+
+如果满足下列条件之一，则常量 x 可以用类型为 T 的值表示：
+
+*   常量 x 在类型 T 所定义的值集合中；
+*   类型 T 是一个浮点类型，常量 x 可以四舍五入到 T 的精度而不会溢出。（使用 IEEE 754 四舍五入规则，但是 IEEE 中负零进一步简化为无符号零。注意常量永远不可能是 IEEE 中的负零、非数值（NaN）或负无穷大）
+*   类型 T 是一个复合类型，常量 x 的分量 real(x) 和 imag(x) 可以用 T 的分量类型（float32 或 float64）的值表示。
+
+```go
+x                   T           x is representable by a value of T because
+
+'a'                 byte        97 is in the set of byte values
+97                  rune        rune is an alias for int32, and 97 is in the set of 32-bit integers
+"foo"               string      "foo" is in the set of string values
+1024                int16       1024 is in the set of 16-bit integers
+42.0                byte        42 is in the set of unsigned 8-bit integers
+```
+
+```go
+x                   T           x is not representable by a value of T because
+
+0                   bool        0 is not in the set of boolean values
+'a'                 string      'a' is a rune, it is not in the set of string values
+1024                byte        1024 is not in the set of unsigned 8-bit integers
+-1                  uint16      -1 is not in the set of unsigned 16-bit integers
+1.1                 int         1.1 is not an integer value
+42i                 float32     (0 + 42i) is not in the set of float32 values
+1e1000              float64     1e1000 overflows to IEEE +Inf after rounding
+```
 
 ### FQA
 
