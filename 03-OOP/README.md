@@ -12,8 +12,11 @@
         - 嵌入字段的名字屏蔽
         - 嵌入字段对方法集的影响
     - Interface
-        - 接口特性
+        - 空接口
         - 嵌入接口
+        - 类型断言
+        - 接口的应用示例1：非空接口调用所有实现
+        - 接口的应用示例2：空接口的类型断言
     - FQA
         - Q：如何“实例化”接口类型？
         - Q：如何知道结构体实现了某个接口？
@@ -277,7 +280,9 @@ func main() {
 
 ### Interface
 
-接口就是一组方法签名的集合。接口类型指定了一个方法集，并把这个方法集称为自己接口。<b>接口类型变量</b>可以存储任何实现了该接口（也即实现了接口声明的所有方法）的类型变量，未初始化的接口变量值为 nil。接口类型中的方法集，可以通过<b>直接显式声明方法</b>，也可以<b>通过接口类型名称嵌入其他接口的方法集</b>形式。显式声明的方法必须是唯一且非空的。示例如下：
+接口就是一组方法签名的集合。接口类型指定了一个方法集，并把这个方法集称为自己接口。<b>接口类型变量</b>可以存储任何实现了该接口（也即实现了接口声明的所有方法）的类型变量，未初始化的接口变量值为 nil。接口类型中的方法集，可以通过<b>直接显式声明方法</b>，也可以<b>通过接口类型名称嵌入其他接口的方法集</b>形式。显式声明的方法必须是唯一且非空的。
+
+示例如下：
 
 ~~~go
 interface {   // A simple File interface.
@@ -293,25 +298,9 @@ interface {
 }
 ~~~
 
-通过接口类型调用多个实现了 Stringer 接口的类型的 String() 方法：
+#### 空接口
 
-~~~go
-type T struct {}
-
-func (t T) String() string {
-    return "T"
-}
-
-var i Stringer = S{}
-i.String()  // 输出：S
-
-i = T{}
-i.String()  // 输出：T
-~~~
-
-#### 接口特性
-
-接口特性如下：
+空接口特性如下：
 
 *   每一个接口都包含两个属性：值和类型 `(type, value)`；
 *   一个接口可以被多个类型实现（一个类型也可以实现多个不同的接口）；
@@ -325,27 +314,23 @@ i.String()  // 输出：T
 type I interface {
     M()
 }
-~~~
 
-~~~go
+// ===================================================
 type S struct {
     x int
 }
 func (s *S) M() {}
-
 var i I = &S{x: 10} // 接口值 i 包含类型 *S 和值 10
-~~~
 
-~~~go
+// ===================================================
 func f(i I) {  // 接口类型值作为函数参数
     i.M()      // 调用接口方法
 }
 func g() I {  // 作为函数的返回值
     return &S{x: 10}
 }
-~~~
 
-~~~go
+// ===================================================
 // Type_assertions
 var x interface{} = 7          // x has dynamic type int and value 7
 i := x.(int)                   // i has type int and value 7
@@ -373,8 +358,85 @@ type ReadWriter interface {  // ReadWriter's methods are Read, Write, and Close.
 }
 ~~~
 
+#### 类型断言
 
+类型断言的表达式：`x.(T)`，表示 x 不是 nil，并且存储在 x 中的值是类型 T。更准确地说，如果 T 不是接口类型，`x.(T)` 断言 x 的动态类型与类型 T 相同。在这种情况下，T 必须实现 x 的(接口)类型；否则类型断言无效，因为 x 不可能存储类型T  的值。如果 T 是接口类型，则 `x.(T)` 断言 x 的动态类型实现接口 T。
 
+类型断言表达式的返回值为 true 或 false。虽然 x 的动态类型仅在运行时（Run-time）可知，但在正确的程序中，`x.(T)` 的类型就是 T，否则运行时发生 panic。
+
+```go
+var x interface{} = 7          // x has dynamic type int and value 7
+i := x.(int)                   // i has type int and value 7
+
+type I interface { m() }
+func f(y I) {
+    s := y.(string)        // illegal: string does not implement I (missing method m)
+    r := y.(io.Reader)     // r has type io.Reader and the dynamic type of y must implement both I and io.Reader
+    …
+}
+```
+
+在赋值或初始化语句中使用类型断言表达式，它将产生一个额外的无类型化布尔值（untyped）。当断言成立时，ok 的值为 true，否则 ok 为 false 且 v 的值为类型 T 的 zero value（布尔值为 false，数字类型为 0，字符串为 `""`，指针、函数、接口、切片、信道和映射为 nil）。同时这种特殊格式将不会在运行时产生 panic。示例如下：
+
+```go
+v, ok = x.(T)                 // 赋值
+v, ok := x.(T)                // 短声明格式
+var v, ok = x.(T)             // 声明
+var v, ok interface{} = x.(T) // dynamic types of v and ok are T and bool
+```
+
+#### 接口的应用示例1：非空接口调用所有实现
+
+通过接口类型调用多个实现了 Stringer 接口的类型的 String() 方法：
+
+~~~go
+type Stringer interface {
+    String() (string)
+}
+
+type T struct {}               // 类型 S 与 T 相同的定义
+func (t T) String() string {   // 也实现了接口的 String()
+    return "T"
+}
+
+func PrintAll(s []Stringer) {
+    for _, i := range s {
+		fmt.Println("接口调用", i.String())
+	}
+}
+
+func main() {
+    stringers := []Stringer{T{}, S{}}  // 同时声明多个接口类型变量
+    PrintAll(stringers)
+}
+~~~
+
+上述示例中，也可以直接使用类型 T 或 S 的变量调用接口方法。
+
+#### 接口的应用示例2：空接口的类型断言
+
+~~~go
+type I interface{
+    print()
+}
+type S struct {
+    x int
+}
+func (t S) print() {
+    fmt.Println("x=", t.x)
+}
+
+// 参数为空接口类型，能够接受任意类型，按需要进行“类型断言”
+func f(i interface{}) {
+  j, _ := i.(I)
+  j.print()
+}
+
+func main() {
+  var i I = S{10}
+  f(i) // 输出：x=10
+}
+~~~
 
 ### FQA
 
