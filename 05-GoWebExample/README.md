@@ -256,6 +256,7 @@ tmpl.Execute(w, struct{ Success bool }{true})   // struct{ Success bool }{true}
 创建一个<b>日志中间件</b>（logging middleware，使用 [`log`](https://pkg.go.dev/log) 包）：中间件只需将 [`http.HandlerFunc`](https://pkg.go.dev/net/http#HandlerFunc) 作为参数之一，对其进行封装，然后返回一个新的 `http.HandlerFunc` 供服务器调用。封装如下（源码见 [basic middleware](https://gowebexamples.com/basic-middleware/)）：
 
 ~~~go
+// HandlerFunc 的定义：type HandlerFunc func(ResponseWriter, *Request)
 func logging(f http.HandlerFunc) http.HandlerFunc {        // 传入参类型与返回类型一致
     return func(w http.ResponseWriter, r *http.Request) {  // 匿名函数
         log.Println(r.URL.Path)                            // 多添加的执行
@@ -264,11 +265,69 @@ func logging(f http.HandlerFunc) http.HandlerFunc {        // 传入参类型与
 }
 ~~~
 
+~~~go
+func foo(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "foo")
+}
+
+func main() {
+    http.HandleFunc("/foo", logging(foo))
+    // http.HandleFunc("/bar", logging(bar))
+    http.ListenAndServe(":8080", nil)
+}
+~~~
 
 ##### 构建高级的中间件
 
 在这里，我们定义了一种新的中间件（Middleware）类型，它可以让多个中间件更容易地连锁在一起。这个想法的灵感来自 Mat Ryers 关于构建应用程序接口的演讲。你可以在这里找到更详细的解释，包括演讲内容。
 
+
+~~~go
+type Middleware func(http.HandlerFunc) http.HandlerFunc
+
+// 创建一个“链”将多个中间件串在一起 middlewares
+func Chain(f http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
+    for _, m := range middlewares {
+        f = m(f)
+    }
+    return f
+}
+~~~
+
+~~~go
+// 中间件 Method
+func Method(m string) Middleware {
+    return func(f http.HandlerFunc) http.HandlerFunc {         // 创建一个中间件
+        return func(w http.ResponseWriter, r *http.Request) {  // 定义
+            // Do middleware things...
+            if r.Method != m {                                 // 不是 HTTP 请求方法的话就异常
+                http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+                return
+            }
+            f(w, r)  // 盗用执行链中的下一个中间件或 handler
+        }
+    }
+}
+
+// 接受请求后的具体 Handler
+func Hello(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "hello world")
+}
+~~~
+
+~~~go
+func main() {
+    // Chain 支持传入多个中间件
+    http.HandleFunc("/", Chain(Hello, Method("GET"), Logging()))
+    http.ListenAndServe(":8080", nil)
+}
+~~~
+
+~~~bash
+$ go run advanced-middleware.go             # 编译执行
+$ curl -s http://localhost:8080/            # 正确的执行，默认是 GET 方法
+$ curl -s -XPOST http://localhost:8080/     # 错误的执行，XPOST 不是 HTTP 的一种请求方法
+~~~
 
 ## 扩展内容
 
