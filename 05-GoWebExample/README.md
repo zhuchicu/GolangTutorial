@@ -1,12 +1,36 @@
 # 05-GoWebExample
 
+- WebServer Package
+    - Package net/http
+        - 创建 webserver 监听连接
+        - 访问静态资源
+        - 访问静态资源的完整示例
+    - Package gorilla/mux
+    - Package database/mysql
+        - 为什么导入 MySQL 驱动程序包使用空占位符？
+    - Package html/template
+        - 控制结构
+        - 从文件中解析模板
+        - 接受请求并进行渲染输出
+        - POST 请求提交表单数据
+    - Package log
+        - 构建高级的中间件
+    - Package gorilla/sessions
+    - Package encoding/json
+    - Package gorilla/websocket
+    - Package x/crypto/bcrypt
+- 扩展内容
+    - Standard library
+        - Package API 文档解析
+
+## WebServer Package
+
 官方推荐的 Web 教程 [GoWebExamples](https://gowebexamples.com/) 中引入了多个非 Go 官方的标准库：
 - 比官方标准库提供更好的性能，但[开源项目 Gorilla 已停止维护](https://tehub.com/a/aVYcm4Jomq)，更多见 [gorilla-toolkit](https://github.com/gorilla#gorilla-toolkit)。
 - 前缀为 `golang.org/x/...` 的包是 Go 项目的一部分，但位于 Go 主干之外。它们是在比 Go 内核更宽松的兼容性要求下开发的。一般来说，它们将支持前两个版本和提示（来源：[Go wiki](https://golang.google.cn/wiki/X-Repositories)）。
 - Go 官方标准库 [database/sql](https://pkg.go.dev/database/sql) 提供了标准的、轻量的、面向行的接口，但不提供具体数据库驱动，只提供驱动接口和管理（这样是为了确保向前兼容，无法预知未来有哪些的数据库，且没有精力维护大量的驱动）。要使用数据库还需要引入想使用的特定数据库驱动，例如 [github.com/go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)。
 
 
-## WebServer Package
 
 ### Package net/http
 
@@ -327,6 +351,169 @@ func main() {
 $ go run advanced-middleware.go             # 编译执行
 $ curl -s http://localhost:8080/            # 正确的执行，默认是 GET 方法
 $ curl -s -XPOST http://localhost:8080/     # 错误的执行，XPOST 不是 HTTP 的一种请求方法
+~~~
+
+### Package gorilla/sessions
+
+
+使用 [gorilla/sessions](https://pkg.go.dev/github.com/gorilla/sessions) 第三方包在会话 cookie 中存储数据。Cookie 是存储在用户浏览器中的小块数据，每次请求时都会发送到我们的服务器。例如，我们可以在其中存储用户是否登录了我们的网站，并找出他（在我们系统中）的真实身份。
+
+1. 使用 `$ go get -u github.com/gorilla/sessions` 命令下载 [gorilla/sessions](https://github.com/gorilla/sessions) 包；
+2. 使用 [`sessions.NewCookieStore()`](https://pkg.go.dev/github.com/gorilla/sessions#NewCookieStore) 创建 [`type CookieStore struct`](https://pkg.go.dev/github.com/gorilla/sessions#CookieStore)；
+3. [`CookieStore.Get()`](https://pkg.go.dev/github.com/gorilla/sessions#CookieStore.Get) 将指定 name 添加到注册表后返回 [`type Session struct`](https://pkg.go.dev/github.com/gorilla/sessions#Session)（其中成员字典 Values 保存了用户的数据），而 [`CookieStore.Save()`](https://pkg.go.dev/github.com/gorilla/sessions#CookieStore.Save) 保存将单个会话添加到响应中（区分存储全部会话的 [`sessions.Save()`](https://pkg.go.dev/github.com/gorilla/sessions#Save)）；
+
+~~~go
+// r *http.Request, w http.ResponseWriter
+var store = sessions.NewCookieStore(key)   // key 是 bytes，创建 CookieStore
+session, _ := store.Get(r, "cookie-name")  // 获取指定 name 的 session
+session.Values["authenticated"] = true     // 或 false，标记用户是否通过身份验证
+session.Save(r, w)                         // 保存会话到响应中
+~~~
+
+~~~go
+// logout 与之类似，只是直接修改 session.Values 中的布尔值为 false
+func login(w http.ResponseWriter, r *http.Request) {
+    session, _ := store.Get(r, "cookie-name")
+    // 此处进行 Authentication 判断，比如根据请求中张用户提交的账号或密码
+    // ...
+    session.Values["authenticated"] = true
+    session.Save(r, w)
+}
+~~~
+
+#### 示例
+
+用户首先必须访问 `/login`，以获得一个有效的会话 cookie，从而登录网站。允许通过身份验证的用户查看 `/secret` 页面上的秘密信息。用户还可以访问 `/logout`，取消对秘密信息的访问权限。详细源码见 [Sessions Example](https://gowebexamples.com/sessions/)。
+
+~~~go
+var (
+    // key must be 16, 24 or 32 bytes long (AES-128, AES-192 or AES-256)
+    key = []byte("super-secret-key")
+    store = sessions.NewCookieStore(key)
+)
+
+// 访问只允许通过身份验证的页面
+func secret(w http.ResponseWriter, r *http.Request) {
+    session, _ := store.Get(r, "cookie-name")
+    // Check if user is authenticated
+    if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+        http.Error(w, "Forbidden", http.StatusForbidden)
+        return
+    }
+    // 访问秘密页面的内容，此处示例用简单的打印示例
+    fmt.Fprintln(w, "The cake is a lie!")
+}
+~~~
+
+上述示例中 `auth, ok := session.Values["authenticated"].(bool)`：
+
+- `session.Values` 是一个 `map[interface{}]interface{}`；
+- `session.Values["authenticated"]` 获取与键 `"authenticated"` 关联的值；
+- `(bool)` 是一个类型转换，它将 `session.Values["authenticated"]` 的值转换为布尔值。如果转换成功，则 `auth` 将包含转换后的布尔值，`ok` 将为 `true`；
+- 如果 `session.Values["authenticated"]` 不存在或无法转换为布尔值，则 `ok` 将为 `false`，`auth` 将包含零值（对于布尔值，零值为 `false`）。
+
+具体执行如下：
+
+~~~go
+func main() {
+    // 对请求的三个路径分别监控响应，然后进行对应的 handle
+    http.HandleFunc("/secret", secret)    // 访问秘密页面
+    http.HandleFunc("/login", login)      // 保存 cookie
+    http.HandleFunc("/logout", logout)    // 删除 cookie
+    http.ListenAndServe(":8080", nil)
+}
+~~~
+
+~~~bash
+$ go run sessions.go                       # 编译运行
+$ curl -s http://localhost:8080/secret     # Forbidden，无法访问
+$ curl -s -I http://localhost:8080/login   # 登录成功，Set-Cookie: cookie-name=MTQ4NzE5Mz...
+$ curl -s --cookie "cookie-name=MTQ4NzE5Mz..." http://localhost:8080/secret
+~~~
+
+
+### Package encoding/json
+
+使用官方的 [encoding/json](https://pkg.go.dev/encoding/json) 包对 JSON 数据进行编码和解码。详细示例见 [JSON Example](https://gowebexamples.com/json/)。
+
+~~~go
+type Encoder struct
+func NewEncoder(w io.Writer) *Encoder
+func (enc *Encoder) Encode(v any) error
+
+type Decoder struct
+func NewDecoder(r io.Reader) *Decoder
+func (dec *Decoder) Decode(v any) error
+~~~
+
+~~~go
+type User struct {
+    Firstname string `json:"firstname"`    // tag 标签，用于序列化
+    Lastname  string `json:"lastname"`
+    Age       int    `json:"age"`
+}
+
+var user User
+json.NewDecoder(r.Body).Decode(&user)   // r *http.Request
+
+
+peter := User{
+    Firstname: "John",
+    Lastname:  "Doe",
+    Age:       25,
+}
+json.NewEncoder(w).Encode(peter)  // w http.ResponseWriter
+~~~
+
+### Package gorilla/websocket
+
+[WebSocket](https://www.rfc-editor.org/rfc/rfc6455.txt) 协议是一种基于TCP 协议的通信协议，它可以在客户端和服务器之间建立双向通信的连接，实现实时数据传输和交互操作。 在 Web 应用程序中，WebSocket 协议可以替代 HTTP 协议的长轮询和短轮询技术，提供更高效和快速的通信方式。其协议端口是 80，不受[同源策略](https://developer.mozilla.org/zh-CN/docs/Web/Security/Same-origin_policy)影响（[浏览器同源政策及其规避方法](https://www.ruanyifeng.com/blog/2016/04/same-origin-policy.html)，即 Cookie 等不共享）。WebSocket 核心是如何建立连接、如何交换数据、数据帧格式和如何维持连接。
+
+第三方 [gorilla/websocket](https://pkg.go.dev/github.com/gorilla/websocket) 包基于该协议实现，并提供了稳定的 API。示例源码见 [Websocket Example](https://gowebexamples.com/websockets/)（也可参见 gorilla 自己的[示例](https://github.com/gorilla/websocket/blob/main/examples/echo/server.go)）。
+
+1. 使用 `$ go get -u github.com/gorilla/websocket` 命令下载 [gorilla/websocket](https://github.com/gorilla/websocket) 包；
+1. 声明 [`type Upgrader struct`](https://pkg.go.dev/github.com/gorilla/websocket#Upgrader) 用于指定将 HTTP 连接升级为 WebSocket 连接的参数（可以使用默认参数值）；
+1. [`Upgrader.Upgrade()`](https://pkg.go.dev/github.com/gorilla/websocket#Upgrader.Upgrade) 将 HTTP 连接升级为 WebSocket 连接，返回 `type Conn struct`；
+1. [`Conn.ReadMessage()`](https://pkg.go.dev/github.com/gorilla/websocket#Conn.ReadMessage) 读取内容，[`Conn.WriteMessage()`](https://pkg.go.dev/github.com/gorilla/websocket#Conn.WriteMessage) 返回内容，[`Conn.Close()`](https://pkg.go.dev/github.com/gorilla/websocket#Conn.Close) 关闭底层网络连接，无需发送或等待关闭消息。
+
+~~~go
+var upgrader = websocket.Upgrader{
+    ReadBufferSize:  1024,
+    WriteBufferSize: 1024,
+}
+
+func echo(w http.ResponseWriter, r *http.Request) {  //  http handler
+    conn, _ := upgrader.Upgrade(w, r, nil)           // 省略了 err 的 return 处理
+    defer conn.Close()                               // 不要忘记了断开连接
+    for {
+        msgType, msg, _ := conn.ReadMessage()        // 省略了 err 的 return 处理
+        _ = conn.WriteMessage(msgType, msg)          // 同上
+    }
+}
+
+func main() {
+    // 省略了 HTML 页面的内容发送部分...
+    http.HandleFunc("/echo", echo)
+    http.ListenAndServe(":8080", nil)
+}
+~~~
+
+
+### Package x/crypto/bcrypt
+
+1. `$ go get golang.org/x/crypto/bcrypt` 获取官方加密包 [x/crypto/bcrypt](https://pkg.go.dev/golang.org/x/crypto/bcrypt)；
+1. [`bcrypt.GenerateFromPassword(password []byte, cost int)`](https://pkg.go.dev/golang.org/x/crypto/bcrypt#GenerateFromPassword) 返回指定强度的密码的 bcrypt 哈希值。如果给定的强度小于 `MinCost=4`，则设置为 `DefaultCost=10`；不接受超过 72 字节的 password，这是 bcrypt 将操作的最长密码。另 `MaxCost=30`，更多见[源码](https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.19.0:bcrypt/bcrypt.go;l=21)。（cost 指 bcrypt 演算法的运算强度，表示用于生成哈希值的迭代次数）
+1. [`bcrypt.CompareHashAndPassword()`](https://pkg.go.dev/golang.org/x/crypto/bcrypt#CompareHashAndPassword) 将 bcrypt 哈希密码与其可能的明文等效密码进行比较。成功时返回 `nil`，失败时返回错误。
+
+详细示例见 [Password Hashing (bcrypt)](https://gowebexamples.com/password-hashing/)：
+
+~~~go
+password := "secret"  // 不能超过 72 个字节
+bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)  // cost=14
+err := bcrypt.CompareHashAndPassword(bytes, password)
+if err == nil {
+    fmt.Println("Match")
+}
 ~~~
 
 ## 扩展内容
