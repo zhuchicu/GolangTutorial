@@ -77,6 +77,13 @@ ModuleExample/
 - ~~文件夹 example 是 `package main`，其从属于 module 名为 `github.com/zhuchicu/example`~~
 - ~~文件夹 mypkg 是 `package mypkg`，其从属于 module 名为 `github.com/zhuchicu/mypkg`~~
 
+go mod, go work 本地 module 和 package 的测试，GOROOT 和 GOPath 分别是什么？
+https://polarisxu.studygolang.com/posts/go/workspace/
+module 名称有多个路径影响么？
+延申：[Go 开源项目推荐：一个简单的 Go 练手项目](https://polarisxu.studygolang.com/posts/go/project/go-web-project-s3-manager/)
+修改：在 <https://github.com/zhuchicu/GolangTutorial/blob/main/04-ModuleReference/README.md> 中添加 gowork 内容，以及添加对应的示例代码。
+
+更多教程见 [Go Modules: A Beginner's Guide.](https://dev.to/kingkunte_/go-modules-beginners-guide-4a7p) ：介绍如何创建一个新的 module，添加依赖、更新依赖、将依赖更新到一个新的大版本，以及如何移除不用的依赖。
 
 #### 使用 replace 指令手动管理依赖的本地 module
 
@@ -127,14 +134,6 @@ ModuleExample/
 
 注：可以通过 `$ go env GOWORK` 查看该环境变量的值，当该值没有设置或者为空时，将使用合理的默认设置。在“模块感知模式”（module aware mode）下，且环境变量 `GOWORK` 是默认值或“=auto”时，将会启用该模式，将会尝试在当前目录及其子目录寻找 `go.work` 文件，若找到则启用工作区模式。若 `GOWORK=off` ，或处于“auto”模式但未找到 `go.work` 时，工作区模式将失效。
 
-
-go mod, go work 本地 module 和 package 的测试，GOROOT 和 GOPath 分别是什么？
-https://polarisxu.studygolang.com/posts/go/workspace/
-module 名称有多个路径影响么？
-延申：[Go 开源项目推荐：一个简单的 Go 练手项目](https://polarisxu.studygolang.com/posts/go/project/go-web-project-s3-manager/)
-修改：在 <https://github.com/zhuchicu/GolangTutorial/blob/main/04-ModuleReference/README.md> 中添加 gowork 内容，以及添加对应的示例代码。
-
-更多教程见 [Go Modules: A Beginner's Guide.](https://dev.to/kingkunte_/go-modules-beginners-guide-4a7p) ：介绍如何创建一个新的 module，添加依赖、更新依赖、将依赖更新到一个新的大版本，以及如何移除不用的依赖。
 
 ### 创建 module 
 
