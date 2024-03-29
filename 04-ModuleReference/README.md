@@ -3,11 +3,23 @@
 - 依赖管理
     - 依赖管理的历史
         - 依赖管理的主要内容
+        - 示例问题
+        - 使用 replace 指令手动管理依赖的本地 module
+        - 使用 Workspace 模式管理依赖的本地 module
     - 创建 module 
         - 如何使用 module
         - go.work 文件
         - go.mod 文件
         - go.sum 文件
+    - FQAs
+        - Q：fmt.Println 和直接 println 有什么区别？
+        - Q：环境变量 GOROOT 和 GOPATH 的作用是什么？
+        - Q：package 和 module 的区别是什么？
+        - Q：Package name VS. Folder name VS. Module name（项目层级关系）
+        - Q：每一个 Module 对应一个 `go.mod` 文件？
+        - Q：环境变量 GO111MODULE
+        - Q：Go 选用哪种命名规范：camelCase vs. PascalCase vs. snake_case vs. Kebab-case
+        - Q：如何在 powershell 中使用命令行修改 go 的环境变量值？
 - 扩展内容
     - 模块感知模式
         - 设置 GOPROXY
@@ -45,6 +57,84 @@ Go Module 阶段：从 Go 1.11 版本开始，官方推出 Go Module 作为包�
 - 管理自己包的依赖：[`go.mod` 文件](https://go.dev/doc/modules/gomod-ref)和 `go.sum` 文件。官方文档 [Managing dependencies](https://go.dev/doc/modules/managing-dependencies)
 - 将自己的包公开发布：版本管理。官方文档 [Publishing a module](https://go.dev/doc/modules/publishing)，[Module version numbering](https://go.dev/doc/modules/version-numbers)
 
+#### 示例问题
+
+问题来源：使用 Golang 完成 [github/RefactoringExercises](https://github.com/zhuchicu/RefactoringExercises)，但是由于依赖管理的问题，导致无法运行的程序。引申出“Go 工作区模式”。
+参考：[通过一个例子让你彻底掌握 Go 工作区模式](https://polarisxu.studygolang.com/posts/go/workspace/)
+
+示例文件层级结构如下：
+
+~~~
+ModuleExample/
+    ├── example/
+    │     ├── go.mod
+    │     └── main.go
+    └── mypkg/
+          ├── go.mod
+          └── bar.go
+~~~
+
+- ~~文件夹 example 是 `package main`，其从属于 module 名为 `github.com/zhuchicu/example`~~
+- ~~文件夹 mypkg 是 `package mypkg`，其从属于 module 名为 `github.com/zhuchicu/mypkg`~~
+
+
+#### 使用 replace 指令手动管理依赖的本地 module
+
+mypkg 模块没有上传到 github，导致 main 中调用失败，所以需要在 `example/go.mod` 中添加 replace 指令，进行替换：
+
+~~~go
+module github.com/zhuchicu/example
+
+go 1.18
+
+require github.com/zhuchicu/mypkg v1.0.0
+replace github.com/zhuchicu/mypkg => ../mypkg
+~~~
+
+缺点：当都开发完成时，我们需要手动删除 replace，并执行 go mod tidy 后提交，否则别人使用就报错了。这还是挺不方便的，如果本地有多个 module，每一个都得这么处理。
+
+#### 使用 Workspace 模式管理依赖的本地 module
+
+针对需要“手动管理本地依赖 module”问题，在 go1.18 版本中提出了 Workspace Mode（工作区模式）。使用 `$ go help work` 可以看到 work 相关命令，更详细介绍见[官方教程](https://go.dev/doc/tutorial/workspaces)。初始化工作区：
+
+~~~
+$ go work init mypkg example
+$ tree
+ModuleExample/
+    ├── example/
+    │   ├── go.mod
+    │   └── main.go
+    ├── go.work
+    └── mypkg/
+        ├── bar.go
+        └── go.mod
+~~~
+
+注意：
+
+- `go work init` 之后跟上需要本地开发的子模块目录名，所以是在 ModuleExample 目录中执行该命令。建议多个子模块应该在一个目录下，例如此处的 ModuleExample 目录，这样更好管理。
+- [go.work 文件的语法](https://go.dev/ref/mod#workspaces)和 go.mod 类似，但优先级高于 go.mod，因此也支持 replace。
+- 实际项目中，多个模块之间可能还依赖其他模块，建议在 go.work 所在目录执行 `go work sync`。
+- go.work 不需要提交到 Git 中，因为它只是你本地开发使用的。
+
+接下来，按照下面的步骤修改之前的处理，以便达到管理本地的依赖 module：
+
+1. 将 example/go.mod 中的 replace 语句删除；
+2. 在 example 目录下再次执行 `go run main.go`，得到了正常的输出；
+3. 开发完成后，先提交 mypkg 包到 GitHub；
+4. 在 example 目录下面执行 `$ go get -u github.com/zhuchicu/mypkg@latest`；
+5. 通过[环境变量 `GOWORK=off`](https://pkg.go.dev/cmd/go#hdr-Environment_variables) 禁用 workspace，再次运行 example 模块，验证是否正确。
+
+注：可以通过 `$ go env GOWORK` 查看该环境变量的值，当该值没有设置或者为空时，将使用合理的默认设置。在“模块感知模式”（module aware mode）下，且环境变量 `GOWORK` 是默认值或“=auto”时，将会启用该模式，将会尝试在当前目录及其子目录寻找 `go.work` 文件，若找到则启用工作区模式。若 `GOWORK=off` ，或处于“auto”模式但未找到 `go.work` 时，工作区模式将失效。
+
+
+go mod, go work 本地 module 和 package 的测试，GOROOT 和 GOPath 分别是什么？
+https://polarisxu.studygolang.com/posts/go/workspace/
+module 名称有多个路径影响么？
+延申：[Go 开源项目推荐：一个简单的 Go 练手项目](https://polarisxu.studygolang.com/posts/go/project/go-web-project-s3-manager/)
+修改：在 <https://github.com/zhuchicu/GolangTutorial/blob/main/04-ModuleReference/README.md> 中添加 gowork 内容，以及添加对应的示例代码。
+
+更多教程见 [Go Modules: A Beginner's Guide.](https://dev.to/kingkunte_/go-modules-beginners-guide-4a7p) ：介绍如何创建一个新的 module，添加依赖、更新依赖、将依赖更新到一个新的大版本，以及如何移除不用的依赖。
 
 ### 创建 module 
 
@@ -141,6 +231,88 @@ go: found rsc.io/quote in rsc.io/quote v1.5.2
 
 $ go run .
 ~~~
+
+### FQAs
+
+#### Q：[fmt.Println 和直接 println 有什么区别？](https://www.zhihu.com/question/335186436)
+
+print/println 是 builtin 包提供，语言内置，而 [fmt.Println 来自标准库](https://pkg.go.dev/fmt#Println)。fmt.Println 输出到标准输出，而 [println 输出至标准错误](https://gfw.go101.org/article/unofficial-faq.html#print-builtin-fmt-log)。当你在本地使用 terminal 之类的东西，是看不出区别的，这个在 [Go playground](https://go.dev/play/) 中运行之后会发现，使用 println 打印出来的结果是红色的。大多数程序语言都会有至少两套 print 方式，一个是正常输出，一个是 error 输出，println 就是 error 输出，但并不会挂起或者退出程序。
+
+#### Q：环境变量 GOROOT 和 GOPATH 的作用是什么？
+
+GOROOT 是 Go 语言的安装路径，类似于其他编程语言中的 JDK 或环境变量。它指定了 Go 的标准库的安装位置，包括常用的标准库如 fmt、os、net 等。
+GOPATH 是 Go 语言的工作空间，用于存储项目代码和第三方依赖包。注意：GOPATH 不再是必需的。自 Go 1.11 开始，Go Modules 取代了 GOPATH 的传统依赖管理方式，在 Go 1.18 以后支持多工作区模式。
+
+#### Q：package 和 module 的区别是什么？
+
+package 是用于组织 Go 源代码的基本单元，而 module 则是用于管理 Go 项目的依赖关系和版本控制的更大的单元。一个 module 可能包含多个 package。
+
+#### Q：Package name VS. Folder name VS. Module name（项目层级关系）
+
+在 Go 语言中，包名、文件夹名和模块名之间有一定的关系，同时也有一些命名规范。让我为您解释一下：
+
+- 包名（Package Name）：用于标识源代码文件所属的包，通常是小写字母，不使用下划线或其他特殊字符。一个包的名字不需要与其所在的文件夹名或模块名完全一致，但建议保持一致性以提高代码的可读性。
+- 文件夹名（Folder Name）：源代码文件应该存放在与包名相关联的文件夹中。文件夹名与包名可以不完全一致，但通常保持一致性，便于组织和维护代码。
+- 模块名（Module Name）：模块名通常与版本控制系统（如Git）上的仓库名相关联，用于唯一标识一个模块。一般使用小写字母，不使用下划线或其他特殊字符。
+
+包名、文件夹名和模块名都使用驼峰命名法。例如，一个名为"example_package"的包应该在代码中声明为"package examplepackage"，并存放在名为"examplepackage"的文件夹中。
+
+#### Q：每一个 Module 对应一个 `go.mod` 文件？
+
+是的，每个 Go 模块都对应一个 `go.mod` 文件。在 Go 中，<b>每个模块的顶层目录</b>都包含一个 `go.mod` 文件，而每个 `go.mod` 文件都定义了一个唯一的模块。因此，在 Go 编程中，模块与其 `go.mod` 文件之间存在一对一的关系。
+
+#### Q：环境变量 GO111MODULE
+
+GO111MODULE 的作用在于控制项目是否使用 Go Modules 进行包管理，根据不同设置来决定项目的依赖管理方式。设置为 on、off、auto 三个值：
+
+- auto：只要项目包含了 go.mod 文件就启用 Go modules，目前在 Go 1.11 至 Go 1.14 中仍然是默认值。
+- on：启用 Go modules，是推荐设置，将会是未来版本中的默认值。
+- off：禁用 Go modules，不推荐设置。
+
+#### Q：Go 选用哪种命名规范：[camelCase vs. PascalCase vs. snake_case vs. Kebab-case](https://www.techopedia.com/definition/pascal-case)
+
+convention：
+
+- camelCase 命名，例如 myClass。
+- PascalCase 命名，例如 MyClass。
+- snake_case 命名（也叫 flatcase），例如 my_class。
+- Kebab 命名，例如 my-class。
+
+<b>snake_case</b> is most common in Go.
+i.e. `foo_windows.go` only builds on windows.
+`foo_test.go` only runs under go test. 
+
+更多命名参考见 [Naming Conventions in Golang](https://www.mohitkhare.com/blog/go-naming-conventions/)：包、接口、文件、函数、变量，例如 bool 类型的变量名称应该以 Has、Is、Can 或 Allow 等开头。以及 Golang 官方关于命名规范的讨论 [doc: filename conventions #36060](https://github.com/golang/go/issues/36060)。
+
+
+
+#### Q：如何在 powershell 中使用命令行修改 go 的环境变量值？
+
+应用场景：运行了一个 helloworld 打印，提示 `package fmt is not in GOROOT (C:\Users\PC\sdk\go1.18\bin\src\fmt)`，使用 `$ go env` 查看环境变量 GOROOT 的路径不对，见下：
+
+~~~bash
+set GO111MODULE=
+set GOPATH=C:\Users\PC\go
+set GOROOT=C:\Users\PC\sdk\go1.18\bin
+~~~
+
+GOROOT 的子路径没有 `\bin`，将其修改为正确路径：
+
+~~~powershell
+$env:GOROOT = "C:\Users\PC\sdk\go1.18"
+~~~
+
+此时标准库 fmt 的加载路径才是正确的：`C:\Users\PC\sdk\go1.18\src\fmt`。在程序中修改可以使用 `os.Setenv` 函数。
+
+注意：这种修改环境变量的行为只在当前命令行的 session 内有效，重现打开其他的命令窗口将依旧显示原始值。如果想要永久改变的话，按照如下步骤：
+
+1. Press Win + R to open the "Run" dialog.
+1. Type `SystemPropertiesAdvanced` and press Enter.
+1. click on the "Environment Variables" button.
+1. Under "System variables" or "User variables", click "New" to add a new variable or select an existing variable to edit.
+1. Set the variable name (e.g., GOPATH) and its value.
+1. Click "OK" to save the changes.
+
 
 ## 扩展内容
 
